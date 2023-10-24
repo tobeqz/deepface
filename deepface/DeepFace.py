@@ -441,7 +441,7 @@ def find(
 
             save_pickle (boolean): option to save representations as a pickle file
 
-            extractions_db (boolean): set this to True if you want to put representations in db_path instead of images
+            extractions_db (boolean): set this to True if you want to put representations in db_path instead of images, if true, db_path accepts a List<string, dict>
 
     Returns:
             This function returns list of pandas data frame. Each item of the list corresponding to
@@ -540,10 +540,10 @@ def find(
                     instance.append(img_representation)
                     representations.append(instance)
             else:
-                img_representation = employee[0]["embedding"]
+                img_representation = employee[1]["embedding"]
 
                 instance = []
-                instance.append(employee)
+                instance.append(employee[0])
                 instance.append(img_representation)
                 representations.append(instance)
 
