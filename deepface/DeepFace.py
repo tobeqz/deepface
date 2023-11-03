@@ -396,9 +396,11 @@ def analyze(
     return resp_objects
 
 
+
 def find(
     img_path,
     db_path,
+    representations=[],
     model_name="VGG-Face",
     distance_metric="cosine",
     enforce_detection=True,
@@ -408,6 +410,7 @@ def find(
     silent=False,
     save_pickle=True,
     extractions_db=False,
+    do_representations=False
 ):
     """
     This function applies verification several times and find the identities in a database
@@ -461,103 +464,104 @@ def find(
     file_name = f"representations_{model_name}.pkl"
     file_name = file_name.replace("-", "_").lower()
 
-    if not extractions_db and path.exists(db_path + "/" + file_name):
+    if not do_representations:
+        if not extractions_db and path.exists(db_path + "/" + file_name):
 
-        if not silent:
-            print(
-                f"WARNING: Representations for images in {db_path} folder were previously stored"
-                + f" in {file_name}. If you added new instances after the creation, then please "
-                + "delete this file and call find function again. It will create it again."
-            )
-
-        with open(f"{db_path}/{file_name}", "rb") as f:
-            representations = pickle.load(f)
-
-        if not silent:
-            print("There are ", len(representations), " representations found in ", file_name)
-
-    else:  # create representation.pkl from scratch
-        employees = []
-
-        if not extractions_db:
-            for r, _, f in os.walk(db_path):
-                for file in f:
-                    if (
-                        (".jpg" in file.lower())
-                        or (".jpeg" in file.lower())
-                        or (".png" in file.lower())
-                    ):
-                        exact_path = r + "/" + file
-                        employees.append(exact_path)
-
-            if len(employees) == 0:
-                raise ValueError(
-                    "There is no image in ",
-                    db_path,
-                    " folder! Validate .jpg or .png files exist in this path.",
+            if not silent:
+                print(
+                    f"WARNING: Representations for images in {db_path} folder were previously stored"
+                    + f" in {file_name}. If you added new instances after the creation, then please "
+                    + "delete this file and call find function again. It will create it again."
                 )
-        else:
-            employees = db_path
 
-        # ------------------------
-        # find representations for db images
+            with open(f"{db_path}/{file_name}", "rb") as f:
+                representations = pickle.load(f)
 
-        representations = []
+            if not silent:
+                print("There are ", len(representations), " representations found in ", file_name)
 
-        # for employee in employees:
-        pbar = tqdm(
-            range(0, len(employees)),
-            desc="Finding representations",
-            disable=silent,
-        )
-        for index in pbar:
-            employee = employees[index]
+        else:  # create representation.pkl from scratch
+            employees = []
 
             if not extractions_db:
-                img_objs = functions.extract_faces(
-                    img=employee,
-                    target_size=target_size,
-                    detector_backend=detector_backend,
-                    grayscale=False,
-                    enforce_detection=enforce_detection,
-                    align=align,
-                )
+                for r, _, f in os.walk(db_path):
+                    for file in f:
+                        if (
+                            (".jpg" in file.lower())
+                            or (".jpeg" in file.lower())
+                            or (".png" in file.lower())
+                        ):
+                            exact_path = r + "/" + file
+                            employees.append(exact_path)
 
-                for img_content, _, _ in img_objs:
-                    embedding_obj = represent(
-                        img_path=img_content,
-                        model_name=model_name,
+                if len(employees) == 0:
+                    raise ValueError(
+                        "There is no image in ",
+                        db_path,
+                        " folder! Validate .jpg or .png files exist in this path.",
+                    )
+            else:
+                employees = db_path
+
+            # ------------------------
+            # find representations for db images
+
+            representations = []
+
+            # for employee in employees:
+            pbar = tqdm(
+                range(0, len(employees)),
+                desc="Finding representations",
+                disable=silent,
+            )
+            for index in pbar:
+                employee = employees[index]
+
+                if not extractions_db:
+                    img_objs = functions.extract_faces(
+                        img=employee,
+                        target_size=target_size,
+                        detector_backend=detector_backend,
+                        grayscale=False,
                         enforce_detection=enforce_detection,
-                        detector_backend="skip",
                         align=align,
-                        normalization=normalization,
                     )
 
-                    img_representation = embedding_obj[0]["embedding"]
+                    for img_content, _, _ in img_objs:
+                        embedding_obj = represent(
+                            img_path=img_content,
+                            model_name=model_name,
+                            enforce_detection=enforce_detection,
+                            detector_backend="skip",
+                            align=align,
+                            normalization=normalization,
+                        )
+
+                        img_representation = embedding_obj[0]["embedding"]
+
+                        instance = []
+                        instance.append(employee)
+                        instance.append(img_representation)
+                        representations.append(instance)
+                else:
+                    img_representation = employee[1]["embedding"]
 
                     instance = []
-                    instance.append(employee)
+                    instance.append(employee[0])
                     instance.append(img_representation)
                     representations.append(instance)
-            else:
-                img_representation = employee[1]["embedding"]
 
-                instance = []
-                instance.append(employee[0])
-                instance.append(img_representation)
-                representations.append(instance)
+            # -------------------------------
 
-        # -------------------------------
+            if save_pickle:
+                with open(f"{db_path}/{file_name}", "wb") as f:
+                    pickle.dump(representations, f)
 
-        if save_pickle:
-            with open(f"{db_path}/{file_name}", "wb") as f:
-                pickle.dump(representations, f)
-
-        if not silent:
-            print(
-                f"Representations stored in {db_path}/{file_name} file."
-                + "Please delete this file when you add new identities in your database."
-            )
+            if not silent:
+                print(
+                    f"Representations stored in {db_path}/{file_name} file."
+                    + "Please delete this file when you add new identities in your database."
+                )
 
     # ----------------------------
     # now, we got representations for facial database
